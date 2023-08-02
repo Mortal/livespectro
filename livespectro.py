@@ -1,18 +1,6 @@
+import subprocess
+
 import numpy as np
-import pasimple
-
-# Audio attributes for the recording
-fmt = pasimple.PA_SAMPLE_FLOAT32LE
-sample_width = pasimple.format2width(fmt)
-nchannels = 1
-sample_rate = 48000
-# nsamples = 2**15
-# seconds = nsamples / sample_rate
-seconds = 0.2
-nsamples = int(sample_rate * seconds)
-
-win = np.hanning(nsamples)
-yscale = sample_rate / len(win)
 
 
 colors = [
@@ -25,7 +13,7 @@ colors = [
     "\x1b[0;31m",
     "\x1b[0;31;1m",
 ]
-chars = ['.', '1', '2', '3', 'a', 'b', 'c', '>']
+chars = [".", "1", "2", "3", "a", "b", "c", ">"]
 steps = [-48, -42, -36, -30, -24, -18, -12]
 assert len(chars) == len(colors) == len(steps) + 1
 
@@ -44,18 +32,42 @@ def colorize(db: np.ndarray):
         yield chars[i]
 
 
-try:
+# Audio attributes for the recording
+# fmt = pasimple.PA_SAMPLE_FLOAT32LE
+sample_width = 4  # pasimple.format2width(fmt)
+nchannels = 1
+sample_rate = 24000
+
+# nsamples = 2**15
+# seconds = nsamples / sample_rate
+seconds = 0.2
+nsamples = int(sample_rate * seconds)
+win = np.hanning(nsamples)
+yscale = sample_rate / len(win)
+num_bytes = int(nchannels * sample_width * nsamples)
+
+cmdline = [
+    "parec",
+    f"--latency={num_bytes}",
+    f"--channels={nchannels}",
+    "--format=float32ne",
+    "-r",
+    "--raw",
+    f"--rate={sample_rate}",
+]
+
+with subprocess.Popen(cmdline, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE) as p:
+    assert p.stdout is not None
     print(wrapoff, end="")
-    with pasimple.PaSimple(pasimple.PA_STREAM_RECORD, fmt, nchannels, sample_rate) as pa:
-        num_bytes = int(nchannels * sample_width * nsamples)
-        for _ in range(int(1000/seconds)):
-            audio_data_bytes = pa.read(num_bytes)
-            audio_data = np.frombuffer(audio_data_bytes, dtype={pasimple.PA_SAMPLE_FLOAT32LE: np.float32}[fmt])
+    try:
+        while True:
+            audio_data_bytes = p.stdout.read(num_bytes)
+            audio_data = np.frombuffer(audio_data_bytes, dtype=np.float32)
             spec = np.fft.rfft(audio_data * win) / nsamples
             psd = np.abs(spec)
             db = 10 * np.log10(psd)
             print("".join(colorize(db)), flush=True)
-except KeyboardInterrupt:
-    pass
-finally:
-    print(wrapon, end="", flush=True)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print(wrapon, end="", flush=True)

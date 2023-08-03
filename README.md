@@ -15,3 +15,7 @@ brum.py
 Run `brum.py` to watch out for when there is a low frequency buzz around 50-55 Hz and give you a desktop notification to take your headphones on/off.
 
 Useful if your desk is right next to a fridge/freezer with a loud compressor that turns off and on periodically.
+
+Coincidentally, this is what livespectro.py looks like when my fridge/freezer is on:
+
+![Another example of livespectro.py](screencast2.gif)

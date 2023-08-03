@@ -99,19 +99,17 @@ spectro_steps = [-48, -42, -36, -30, -24, -18, -12]
 
 wrapon = "\x1b[?7h"
 wrapoff = "\x1b[?7l"
-
-
-def print_spectro_line(db: np.ndarray) -> None:
-    print("".join(colorize(db, spectro_colors, spectro_chars, spectro_steps)), flush=True)
+cursorvis = "\x1b[?25h"
+cursorinvis = "\x1b[?25l"
 
 
 def print_spectro_lines(dbs: Iterable[np.ndarray]) -> None:
     try:
-        print(wrapoff, end="")
+        print(wrapoff + cursorinvis, end="")
         for db in dbs:
-            print_spectro_line(db)
+            print("\n" + "".join(colorize(db, spectro_colors, spectro_chars, spectro_steps)), flush=True, end="")
     finally:
-        print(wrapon, end="", flush=True)
+        print(wrapon + cursorvis, end="", flush=True)
 
 
 def main() -> None:

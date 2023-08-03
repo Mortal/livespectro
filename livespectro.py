@@ -39,7 +39,7 @@ class RecordingSettings:
         return int(self.nchannels * self.sample_width * self.nsamples)
 
 
-def live_spectro(settings: RecordingSettings) -> Iterator[np.ndarray]:
+def live_spectro(settings: RecordingSettings, count: int = -1) -> Iterator[np.ndarray]:
     win = np.hanning(settings.nsamples)
     assert len(win) == settings.nsamples
 
@@ -56,7 +56,7 @@ def live_spectro(settings: RecordingSettings) -> Iterator[np.ndarray]:
     with subprocess.Popen(cmdline, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE) as p:
         assert p.stdout is not None
         try:
-            while True:
+            for _ in (range(count) if count >= 0 else iter(lambda: 1, 0)):
                 audio_data_bytes = p.stdout.read(settings.num_bytes)
                 audio_data: np.ndarray = np.frombuffer(audio_data_bytes, dtype=settings.format_np)
                 spec = np.fft.rfft(audio_data * win) / settings.nsamples
@@ -66,6 +66,8 @@ def live_spectro(settings: RecordingSettings) -> Iterator[np.ndarray]:
                 db = 10 * np.log10(psd)
                 db[zero] = -np.inf
                 yield db
+            p.stdout.close()
+            p.terminate()
         except KeyboardInterrupt:
             pass
 

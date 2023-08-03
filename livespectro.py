@@ -1,27 +1,74 @@
 import subprocess
+from dataclasses import dataclass
+from typing import Iterator, Iterable, Sequence
 
 import numpy as np
 
 
-colors = [
-    "\x1b[0m",
-    "\x1b[0;32m",
-    "\x1b[0;32;1m",
-    "\x1b[0;33;1m",
-    "\x1b[0;35;1m",
-    "\x1b[0;35m",
-    "\x1b[0;31m",
-    "\x1b[0;31;1m",
-]
-chars = [".", "1", "2", "3", "a", "b", "c", ">"]
-steps = [-48, -42, -36, -30, -24, -18, -12]
-assert len(chars) == len(colors) == len(steps) + 1
+@dataclass
+class RecordingSettings:
+    sample_rate: int = 24000
+    seconds: float = 0.2
 
-wrapon = "\x1b[?7h"
-wrapoff = "\x1b[?7l"
+    @property
+    def format_parec(self) -> str:
+        return "float32ne"
+
+    @property
+    def format_np(self) -> type:
+        return np.float32
+
+    @property
+    def sample_width(self) -> int:
+        return 4
+
+    @property
+    def nchannels(self) -> int:
+        return 1
+
+    @property
+    def nsamples(self) -> int:
+        return int(self.sample_rate * self.seconds)
+
+    @property
+    def yscale(self) -> float:
+        return self.sample_rate / self.nsamples
+
+    @property
+    def num_bytes(self) -> int:
+        return int(self.nchannels * self.sample_width * self.nsamples)
 
 
-def colorize(db: np.ndarray):
+def live_spectro(settings: RecordingSettings) -> Iterator[np.ndarray]:
+    win = np.hanning(settings.nsamples)
+    assert len(win) == settings.nsamples
+
+    cmdline = [
+        "parec",
+        f"--latency={settings.num_bytes}",
+        f"--channels={settings.nchannels}",
+        f"--format={settings.format_parec}",
+        "-r",
+        "--raw",
+        f"--rate={settings.sample_rate}",
+    ]
+
+    with subprocess.Popen(cmdline, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE) as p:
+        assert p.stdout is not None
+        try:
+            while True:
+                audio_data_bytes = p.stdout.read(settings.num_bytes)
+                audio_data: np.ndarray = np.frombuffer(audio_data_bytes, dtype=settings.format_np)
+                spec = np.fft.rfft(audio_data * win) / settings.nsamples
+                psd = np.abs(spec)
+                db = 10 * np.log10(psd)
+                yield db
+        except KeyboardInterrupt:
+            pass
+
+
+def colorize(db: np.ndarray, colors: Sequence[str], chars: Sequence[str], steps: Sequence[int | float]) -> Iterator[str]:
+    assert len(chars) == len(colors) == len(steps) + 1
     c = colors[0]
     yield c
     for v in db:
@@ -32,42 +79,40 @@ def colorize(db: np.ndarray):
         yield chars[i]
 
 
-# Audio attributes for the recording
-# fmt = pasimple.PA_SAMPLE_FLOAT32LE
-sample_width = 4  # pasimple.format2width(fmt)
-nchannels = 1
-sample_rate = 24000
-
-# nsamples = 2**15
-# seconds = nsamples / sample_rate
-seconds = 0.2
-nsamples = int(sample_rate * seconds)
-win = np.hanning(nsamples)
-yscale = sample_rate / len(win)
-num_bytes = int(nchannels * sample_width * nsamples)
-
-cmdline = [
-    "parec",
-    f"--latency={num_bytes}",
-    f"--channels={nchannels}",
-    "--format=float32ne",
-    "-r",
-    "--raw",
-    f"--rate={sample_rate}",
+spectro_colors = [
+    "\x1b[0m",
+    "\x1b[0;32m",
+    "\x1b[0;32;1m",
+    "\x1b[0;33;1m",
+    "\x1b[0;35;1m",
+    "\x1b[0;35m",
+    "\x1b[0;31m",
+    "\x1b[0;31;1m",
 ]
+spectro_chars = [".", "1", "2", "3", "a", "b", "c", ">"]
+spectro_steps = [-48, -42, -36, -30, -24, -18, -12]
 
-with subprocess.Popen(cmdline, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE) as p:
-    assert p.stdout is not None
-    print(wrapoff, end="")
+wrapon = "\x1b[?7h"
+wrapoff = "\x1b[?7l"
+
+
+def print_spectro_line(db: np.ndarray) -> None:
+    print("".join(colorize(db, spectro_colors, spectro_chars, spectro_steps)), flush=True)
+
+
+def print_spectro_lines(dbs: Iterable[np.ndarray]) -> None:
     try:
-        while True:
-            audio_data_bytes = p.stdout.read(num_bytes)
-            audio_data = np.frombuffer(audio_data_bytes, dtype=np.float32)
-            spec = np.fft.rfft(audio_data * win) / nsamples
-            psd = np.abs(spec)
-            db = 10 * np.log10(psd)
-            print("".join(colorize(db)), flush=True)
-    except KeyboardInterrupt:
-        pass
+        print(wrapoff, end="")
+        for db in dbs:
+            print_spectro_line(db)
     finally:
         print(wrapon, end="", flush=True)
+
+
+def main() -> None:
+    settings = RecordingSettings(sample_rate=24000, seconds=0.2)
+    print_spectro_lines(live_spectro(settings))
+
+
+if __name__ == "__main__":
+    main()

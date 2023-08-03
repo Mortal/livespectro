@@ -61,7 +61,10 @@ def live_spectro(settings: RecordingSettings) -> Iterator[np.ndarray]:
                 audio_data: np.ndarray = np.frombuffer(audio_data_bytes, dtype=settings.format_np)
                 spec = np.fft.rfft(audio_data * win) / settings.nsamples
                 psd = np.abs(spec)
+                zero = psd == 0
+                psd[zero] = 1
                 db = 10 * np.log10(psd)
+                db[zero] = -np.inf
                 yield db
         except KeyboardInterrupt:
             pass

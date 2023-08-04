@@ -25,7 +25,7 @@ def main() -> None:
     for db in live_spectro(settings):
         # v = db[brum_freq - 1] * .25 + db[brum_freq] * .5 + db[brum_freq + 1] * .25
         v = db[brum_freq]
-        b = v > -18 
+        b = v > -20
         if b:
             t = min(time_window, t + 1)
             f = max(0, f - 1)

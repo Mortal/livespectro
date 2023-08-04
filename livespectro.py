@@ -53,12 +53,16 @@ def live_spectro(settings: RecordingSettings, count: int = -1) -> Iterator[np.nd
         f"--rate={settings.sample_rate}",
     ]
 
-    with subprocess.Popen(cmdline, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE) as p:
+    with subprocess.Popen(
+        cmdline, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE
+    ) as p:
         assert p.stdout is not None
         try:
-            for _ in (range(count) if count >= 0 else iter(lambda: 1, 0)):
+            for _ in range(count) if count >= 0 else iter(lambda: 1, 0):
                 audio_data_bytes = p.stdout.read(settings.num_bytes)
-                audio_data: np.ndarray = np.frombuffer(audio_data_bytes, dtype=settings.format_np)
+                audio_data: np.ndarray = np.frombuffer(
+                    audio_data_bytes, dtype=settings.format_np
+                )
                 spec = np.fft.rfft(audio_data * win) / settings.nsamples
                 psd = np.abs(spec)
                 zero = psd == 0
@@ -72,7 +76,12 @@ def live_spectro(settings: RecordingSettings, count: int = -1) -> Iterator[np.nd
             pass
 
 
-def colorize(db: np.ndarray, colors: Sequence[str], chars: Sequence[str], steps: Sequence[int | float]) -> Iterator[str]:
+def colorize(
+    db: np.ndarray,
+    colors: Sequence[str],
+    chars: Sequence[str],
+    steps: Sequence[int | float],
+) -> Iterator[str]:
     assert len(chars) == len(colors) == len(steps) + 1
     c = colors[0]
     yield c
@@ -107,7 +116,12 @@ def print_spectro_lines(dbs: Iterable[np.ndarray]) -> None:
     try:
         print(wrapoff + cursorinvis, end="")
         for db in dbs:
-            print("\n" + "".join(colorize(db, spectro_colors, spectro_chars, spectro_steps)), flush=True, end="")
+            print(
+                "\n"
+                + "".join(colorize(db, spectro_colors, spectro_chars, spectro_steps)),
+                flush=True,
+                end="",
+            )
     finally:
         print(wrapon + cursorvis, end="", flush=True)
 
